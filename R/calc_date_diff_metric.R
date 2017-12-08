@@ -106,14 +106,12 @@ calc_date_diff_metric <- function(start = "assigned"
 
   if(length(tbl_start_cols) > 2){
 
-    start_cols_only <- tbl_start_cols[grep("[v][0-9]", tbl_start_cols)]
-
     tbl_start <- tbl_start %>%
-      mutate_at(vars(ends_with("v2")), funs(ifelse(. > v1_limit, ., NA))) %>%
-      mutate_at(vars(ends_with("v1")), funs(ifelse(. <= v1_limit, ., NA))) %>%
-      mutate(start_combo := coalesce(!!rlang::sym(start_cols_only[1])
-                                     ,!!rlang::sym(start_cols_only[2]))) %>%
-      select(-one_of(start_cols_only))
+      select(id_visitation_referral_fact, contains('v2')) %>%
+      mutate_at(vars(ends_with("v2")), funs(ifelse(. > v1_limit, ., NA)))
+
+    names(tbl_start) <- c('id_visitation_referral_fact', 'start_combo')
+
   } else{
     tbl_start <- rename_at(.tbl = tbl_start
                            ,.vars = vars(contains(start))
@@ -131,14 +129,12 @@ calc_date_diff_metric <- function(start = "assigned"
 
   if(length(tbl_stop_cols) > 2){
 
-    stop_cols_only <- tbl_stop_cols[grep("[v][0-9]", tbl_stop_cols)]
-
     tbl_stop <- tbl_stop %>%
-      mutate_at(vars(ends_with("v2")), funs(ifelse(. > v1_limit, ., NA))) %>%
-      mutate_at(vars(ends_with("v1")), funs(ifelse(. <= v1_limit, ., NA))) %>%
-      mutate(stop_combo := coalesce(!!rlang::sym(stop_cols_only[1])
-                                    ,!!rlang::sym(stop_cols_only[2]))) %>%
-      select(-one_of(stop_cols_only))
+      select(id_visitation_referral_fact, contains('v2')) %>%
+      mutate_at(vars(ends_with("v2")), funs(ifelse(. > v1_limit, ., NA)))
+
+    names(tbl_stop) <- c('id_visitation_referral_fact', 'stop_combo')
+
   }  else{
     tbl_stop <- rename_at(.tbl = tbl_stop
                            ,.vars = vars(contains(stop))
@@ -149,16 +145,15 @@ calc_date_diff_metric <- function(start = "assigned"
   message("format recepit times... ", appendLF = FALSE)
 
   tbl_receipts <- tbl(con, "visitation_referral_fact") %>%
-    select(id_calendar_dim_received_v1
-           ,id_calendar_dim_received_v2
+    select(id_calendar_dim_received_v2
            ,id_visitation_referral_fact) %>%
     as_data_frame()
 
   tbl_receipts <- tbl_receipts %>%
-    mutate_at(vars(ends_with("v2")), funs(ifelse(. > v1_limit, ., NA))) %>%
-    mutate_at(vars(ends_with("v1")), funs(ifelse(. <= v1_limit, ., NA))) %>%
-    mutate(date_marker = coalesce(id_calendar_dim_received_v2, id_calendar_dim_received_v1)) %>%
-    select(-id_calendar_dim_received_v1, -id_calendar_dim_received_v2)
+    select(id_visitation_referral_fact, contains('v2')) %>%
+    mutate_at(vars(ends_with("v2")), funs(ifelse(. > v1_limit, ., NA)))
+
+  names(tbl_receipts) <- c('id_visitation_referral_fact', 'date_marker')
 
   message("done")
 
