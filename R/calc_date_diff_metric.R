@@ -22,7 +22,7 @@ calc_date_diff_metric <- function(start = "assigned"
                                 ,obs_window_start = as.Date(ifelse(ymd(20170920) + days(180) > rollback(today())
                                                                    ,ymd(20170920), rollback(today()) - days(180))
                                                             ,origin = "1970-01-01")
-                                ,obs_window_stop = rollback(today())
+                                ,obs_window_stop = today()
                                 ,bld_sch_name = "independent"
                                 ,establish_con = TRUE
                                 ,exclude_negative = TRUE
