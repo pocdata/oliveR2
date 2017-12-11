@@ -35,127 +35,49 @@ calc_child_count_referral <- function(contract_network = 2
     message("done")
   }
 
-  message("get table build date... ", appendLF = FALSE)
-  table_build_date <- tbl(con, "visitation_referral_fact") %>%
-    select(id_calendar_dim_table_update) %>%
-    as_data_frame() %>%
-    distinct() %>%
-    .$id_calendar_dim_table_update
-  table_build_date <- ymd(table_build_date, tz = tz)
-  message("done")
+  dat <- DBI::dbGetQuery(con, "SELECT org_id AS id_provider_dim_pcv
+                                      , round(avg((SELECT count(1) FROM json_array_elements(\"childDetails\"))), 1) measure_value
+                               FROM independent.assigned_agreed_scheduled aas
+                               JOIN staging.\"ServiceReferrals\" sr
+                                  ON aas.ref_id = sr.id
+                               LEFT OUTER JOIN
+                               (SELECT \"serviceReferralId\" ref_id
+                                  , count(1) FILTER (WHERE \"cancellationType\" = 'Cancelled (less than 24 hour notice)' AND \"causedBy\" = 'Provider') provider_caused
+                                  , count(1) FILTER (WHERE \"cancellationType\" = 'Cancelled (less than 24 hour notice)') cancelled_visits
+                                FROM staging.\"VisitReports\"
+                                WHERE \"deletedAt\" IS NULL
+                                  AND \"isCurrentVersion\" = true
+                                GROUP BY
+                                  \"serviceReferralId\") vr
+                                USING(ref_id)
+                                WHERE NOT agreed_date IS NULL
+                                  AND NOT scheduled_date IS NULL
+                                  AND \"deletedAt\" IS NULL
+                                  AND \"isCurrentVersion\" = true
+                                GROUP BY org_id")
 
-  if (!is.na(contract_network)) {
-    message("gather network contracts... ", appendLF = FALSE)
+  message("Writing data to file... ", appendLF = FALSE)
 
-    DBI::dbSendQuery(con, dbplyr::build_sql("SET search_path TO ", 'staging'))
+  child_count <- dat
 
-    tbl_network_contracts <- tbl(con, "OrganizationContracts") %>%
-      dplyr::filter(contractOwnerId == contract_network
-             ,is.na(deletedAt)) %>%
-      arrange(desc(updatedAt)) %>%
-      distinct(contractOwnerId
-               ,contractedOrganizationId) %>%
-      select(id_organization = contractedOrganizationId) %>%
-      as_data_frame()
-
-    message("done")
-  }
-
-  ##### INSERT MEASUREMENT HERE ######
-
-  DBI::dbSendQuery(con, dbplyr::build_sql("SET search_path TO ", 'independent'))
-
-  dat <- tbl(con, "visitation_referral_fact") %>%
-    as_data_frame() %>%
-    mutate(dt_calendar_dim_created = ymd(id_calendar_dim_created)) %>%
-
-    select(id_visitation_referral_fact
-           ,dt_calendar_dim_created
-           ,id_provider_dim_pcv
-           ,qt_child_count)
-
-  ###### STOP HERE ########
-
-  if (!is.na(contract_network)) {
-    message("restrict to network contracts... ", appendLF = FALSE)
-
-    dat <- dat %>%
-      dplyr::filter(id_provider_dim_pcv %in% tbl_network_contracts$id_organization) %>%
-      rename(date_marker = dt_calendar_dim_created
-             ,measure_value = qt_child_count)
-    message("done")
-  }
+  child_count$measurement_name <- "child_count"
+  child_count$table_build_date <- today()
+  child_count$obs_window_start <- NA
+  child_count$obs_window_stop <- NA
 
   file_path_long <- paste0(system.file('extdata'
                                        ,package = 'oliveR2')
                            ,'/'
-                           ,paste0("count_long_", measurement_name, ".rds")
+                           ,paste0("count_", measurement_name, ".rds")
   )
 
-  readr::write_rds(dat, file_path_long)
+  readr::write_rds(child_count, file_path_long)
 
-  if (!is.na(obs_window_start)) {
-    message("applying observation window filter... ", appendLF = FALSE)
-
-    dat <- dat %>%
-      dplyr::filter(date_marker >= obs_window_start)
-
-    message("done")
-  }
-
-  if (!is.na(obs_window_stop)) {
-    message("apply observation window filter... ", appendLF = FALSE)
-
-    dat <- dat %>%
-      dplyr::filter(date_marker <= obs_window_stop)
-
-    message("done")
-  }
+  message("done")
 
   message(")xxxxx[;;;;;;;;;> kill connections...", appendLF = FALSE)
 
   kill_pg_connections()
-
-  message("aggregate measurements for providers... ", appendLF = FALSE)
-
-  dat_measurement <- dat %>%
-    select(id_provider_dim_pcv, measure_value) %>%
-    group_by(id_provider_dim_pcv) %>%
-    summarise_all(mean, na.rm = TRUE) %>%
-    mutate_all(funs(ifelse(is.nan(.), NA, .))) %>%
-    mutate(measurement_name = measurement_name
-           ,table_build_date = table_build_date
-           ,obs_window_start = obs_window_start
-           ,obs_window_stop = obs_window_stop)
-
-  file_path_short1 <- paste0(system.file('extdata'
-                                         ,package = 'oliveR2')
-                             ,'/'
-                             ,paste0("count_", measurement_name, ".rds")
-  )
-
-  readr::write_rds(dat_measurement, file_path_short1)
-
-  message("done")
-
-  message("aggregate measurements for network... ", appendLF = FALSE)
-
-  dat_measurement_all <- dat %>%
-    select(measure_value) %>%
-    summarise_all(mean, na.rm = TRUE) %>%
-    mutate_all(funs(ifelse(is.nan(.), NA, .))) %>%
-    mutate(measurement_name = measurement_name
-           ,table_build_date = table_build_date
-           ,obs_window_start = obs_window_start
-           ,obs_window_stop = obs_window_stop)
-
-  file_path_short2 <- paste0(system.file('extdata'
-                                         ,package = 'oliveR2')
-                             ,'/'
-                             ,paste0("count_network_", measurement_name, ".rds")
-  )
-
-  readr::write_rds(dat_measurement_all, file_path_short2)
 
   message("done")
 

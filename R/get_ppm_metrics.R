@@ -31,12 +31,13 @@ x$child_count_value = ppm_helper_single(org_id = org_id
                                                 ,primary_only = TRUE)
 
 x$attendance_per_scheduled_visit = ppm_helper_single(org_id = org_id
-                                        ,df_file = "prop_missed_visit.rds"
+                                        ,df_file = "prop_missed_visit_by_pvd.rds"
                                         ,org_col = "id_provider_dim_pcv"
                                         ,label = "Rate of Provider Cancellations"
                                         ,primary_percent = TRUE
                                         ,primary_only = TRUE
-                                        ,sub_label_pre = "Among 24-Hour Cancellations")
+                                        ,sub_label_pre = "Among 24-Hour Cancellations"
+                                        )
 
 
 x

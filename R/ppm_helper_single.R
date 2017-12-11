@@ -21,14 +21,15 @@ ppm_helper_single <- function(org_id
                                ,primary_only = FALSE
                                ,sub_label_pre = ''
                                ,sub_label_post = ''
-                               ,primary_percent = FALSE) {
+                               ,primary_percent = FALSE
+                              ) {
 
   if (primary_only) {
     measure_extract_single(df_file = df_file
                                               ,measure_col = "measure_value"
                                               ,org_col = org_col
                                               ,org_id = org_id
-                                              ,round_plc = 1
+                                              ,round_plc = 2
                                               ,primary_label = label
                                               ,secondary_label = sub_label_pre
                                               ,tertiary_label = sub_label_post

@@ -30,112 +30,53 @@ calc_prop_missed_visit_prvdr_fault <- function(contract_network = 2
   if (establish_con) {
     message("set connection to build schema... ", appendLF = FALSE)
 
-    suppressMessages(establish_con_olvr_rplc(set_schema = bld_sch_name))
+    suppressMessages(establish_con_olvr_rplc(bld_sch_name ))
 
     message("done")
   }
 
-  message("get table build date... ", appendLF = FALSE)
-  table_build_date <- tbl(con, "visitation_referral_fact") %>%
-    select(id_calendar_dim_table_update) %>%
-    as_data_frame() %>%
-    distinct() %>%
-    .$id_calendar_dim_table_update
-  table_build_date <- ymd(table_build_date, tz = tz)
-  message("done")
+  message("Getting data from SQL... ", appendLF = FALSE)
 
-  if (!is.na(contract_network)) {
-    message("gather network contracts... ", appendLF = FALSE)
+  dat <- DBI::dbGetQuery(con, "SELECT org_id
+                                      , provider_caused
+                                      , cancelled_visits
+                               FROM independent.assigned_agreed_scheduled aas
+                               JOIN staging.\"ServiceReferrals\" sr
+                                  ON aas.ref_id = sr.id
+                               LEFT OUTER JOIN
+                               (SELECT \"serviceReferralId\" ref_id
+                                  , count(1) FILTER (WHERE \"cancellationType\" = 'Cancelled (less than 24 hour notice)' AND \"causedBy\" = 'Provider') provider_caused
+                                  , count(1) FILTER (WHERE \"cancellationType\" = 'Cancelled (less than 24 hour notice)') cancelled_visits
+                                FROM staging.\"VisitReports\"
+                                WHERE \"deletedAt\" IS NULL
+                                  AND \"isCurrentVersion\" = true
+                                GROUP BY
+                                  \"serviceReferralId\") vr
+                                USING(ref_id)
+                                WHERE NOT agreed_date IS NULL
+                                  AND NOT scheduled_date IS NULL
+                                  AND \"deletedAt\" IS NULL
+                                  AND \"isCurrentVersion\" = true")
 
-    DBI::dbSendQuery(con, dbplyr::build_sql("SET search_path TO ", 'staging'))
+  message("Calculate missed visits... ", appendLF = FALSE)
 
-    tbl_network_contracts <- tbl(con, "OrganizationContracts") %>%
-      dplyr::filter(contractOwnerId == contract_network
-             ,is.na(deletedAt)) %>%
-      arrange(desc(updatedAt)) %>%
-      distinct(contractOwnerId
-               ,contractedOrganizationId) %>%
-      select(id_organization = contractedOrganizationId) %>%
-      as_data_frame()
+  missed_visists <-
+    group_by(dat, org_id) %>%
+    summarize(measure_value = sum(provider_caused, na.rm = TRUE) / sum(cancelled_visits, na.rm = TRUE)) %>%
+    rename(id_provider_dim_pcv = org_id)
 
-    message("done")
-  }
+  missed_visists$measurement_name <- 'missed_visit'
+  missed_visists$table_build_date <- today()
+  missed_visists$obs_window_start <- NA
+  missed_visists$obs_window_stop <- NA
 
-  ##### INSERT MEASUREMENT HERE ######
-
-  DBI::dbSendQuery(con, dbplyr::build_sql("SET search_path TO ", 'independent'))
-
-  dat <- tbl(con, "visitation_fact") %>%
-    as_data_frame() %>%
-    mutate(dt_calendar_dim_visit_start = ymd(id_calendar_dim_visit_start)) %>%
-    dplyr::filter(ifelse(is.na(fl_cancelled_not_same_day) | fl_cancelled_not_same_day == FALSE
-                  ,TRUE, FALSE)) %>%
-    select(id_visitation_fact
-           ,id_provider_dim_pcv
-           ,fl_cancelled_same_day
-           ,fl_cancelled_not_same_day
-           ,fl_cancelled_by_provider
-           ,dt_calendar_dim_visit_start) %>%
-    mutate(fl_cancelled_same_day_by_provider = fl_cancelled_by_provider*fl_cancelled_same_day)
-
-  ###### STOP HERE ########
-
-  if (!is.na(contract_network)) {
-    message("restrict to network contracts... ", appendLF = FALSE)
-
-    dat_hack <- dat %>%
-      dplyr::filter(id_provider_dim_pcv %in% tbl_network_contracts$id_organization) %>%
-      rename(date_marker = dt_calendar_dim_visit_start
-             ,measure_value = fl_cancelled_same_day_by_provider) %>%
-      mutate(measure_value = ifelse(measure_value, 1, measure_value)
-             ,measure_value = ifelse(!measure_value, 0, measure_value))
-
-    message("done")
-  }
-
-  file_path_long <- paste0(system.file('extdata'
-                                       ,package = 'oliveR2')
-                           ,'/'
-                           ,paste0("prop_long_", measurement_name, ".rds")
-  )
-
-  readr::write_rds(dat_hack, file_path_long)
-
-  if (!is.na(obs_window_start)) {
-    message("applying observation window filter... ", appendLF = FALSE)
-
-    dat <- dat %>%
-      dplyr::filter(dt_calendar_dim_visit_start >= obs_window_start)
-
-    message("done")
-  }
-
-  if (!is.na(obs_window_stop)) {
-    message("apply observation window filter... ", appendLF = FALSE)
-
-    dat <- dat %>%
-      dplyr::filter(dt_calendar_dim_visit_start <= obs_window_stop)
-
-    message("done")
-  }
-
-  message(")xxxxx[;;;;;;;;;> kill connections...", appendLF = FALSE)
-
-  kill_pg_connections()
-
-  message("aggregate measurements for providers... ", appendLF = FALSE)
-
-  dat_measurement <- dat %>%
-    select(id_provider_dim_pcv, fl_cancelled_same_day_by_provider) %>%
-    group_by(id_provider_dim_pcv) %>%
-    summarise_all(mean, na.rm = TRUE) %>%
-    mutate_all(funs(ifelse(is.nan(.), NA, .))) %>%
-    mutate(measurement_name = measurement_name
-           ,table_build_date = table_build_date
-           ,obs_window_start = obs_window_start
-           ,obs_window_stop = obs_window_stop
-           ,measure_value = fl_cancelled_same_day_by_provider) %>%
-    select(-fl_cancelled_same_day_by_provider)
+  dat_measurement <- select(missed_visists
+                            , id_provider_dim_pcv
+                            , measurement_name
+                            , table_build_date
+                            , obs_window_start
+                            , obs_window_stop
+                            , measure_value)
 
   file_path_short1 <- paste0(system.file('extdata'
                                          ,package = 'oliveR2')
@@ -147,26 +88,9 @@ calc_prop_missed_visit_prvdr_fault <- function(contract_network = 2
 
   message("done")
 
-  message("aggregate measurements for network... ", appendLF = FALSE)
+  message(")xxxxx[;;;;;;;;;> kill connections...", appendLF = FALSE)
 
-  dat_measurement_all <- dat %>%
-    select(fl_cancelled_same_day_by_provider) %>%
-    summarise_all(mean, na.rm = TRUE) %>%
-    mutate_all(funs(ifelse(is.nan(.), NA, .))) %>%
-    mutate(measurement_name = measurement_name
-           ,table_build_date = table_build_date
-           ,obs_window_start = obs_window_start
-           ,obs_window_stop = obs_window_stop
-           ,measure_value = fl_cancelled_same_day_by_provider) %>%
-    select(-fl_cancelled_same_day_by_provider)
-
-  file_path_short2 <- paste0(system.file('extdata'
-                                         ,package = 'oliveR2')
-                             ,'/'
-                             ,paste0("prop_network_", measurement_name, ".rds")
-  )
-
-  readr::write_rds(dat_measurement_all, file_path_short2)
+  kill_pg_connections()
 
   message("done")
 
