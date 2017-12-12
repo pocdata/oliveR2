@@ -24,14 +24,14 @@ get_ppm_metrics <- function(org_id) {
   } else {
 
   x$acceptance_to_schedule <- tibble(threshold = NA
-                                     , value = dat$avg_days_to_scheduled
+                                     , value = dat$avg_days_to_agreed
                                      , label = "Days Until Visit is Scheduled"
                                      , sublabel = ifelse(!is.na(dat$percent_agreed_in_3)
                                                          , paste0(dat$percent_agreed_in_3 * 100, "% Scheduled within 3 Days")
                                                          , NA))
 
   x$acceptance_to_first_visit = tibble(threshold = NA
-                                       , value = dat$avg_days_to_agreed
+                                       , value = dat$avg_days_to_scheduled
                                        , label = "Days Until First Visit, as Planned"
                                        , sublabel = ifelse(!is.na(dat$percent_scheduled_in_7)
                                                            , paste0(dat$percent_scheduled_in_7 * 100, "% Planned within 7 Days")
@@ -43,7 +43,7 @@ get_ppm_metrics <- function(org_id) {
                                , sublabel = NA)
 
   x$attendance_per_scheduled_visit = tibble(threshold = NA
-                                            , value = dat$percent_provider_caused
+                                            , value = paste0(dat$percent_provider_caused * 100, "%")
                                             , label = "Rate of Provider Cancellations"
                                             , sublabel = "Among 24-Hour Cancellations")
 
