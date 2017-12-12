@@ -20,8 +20,12 @@ get_ppm_metrics <- function(org_id) {
   x <- data_frame(id = org_id)
 
   if(NROW(dat) == 0){
-    return(NA)
-  } else {
+
+    dat_names <- names(dat)
+    dat <- data.frame(matrix(NA, 1, NCOL(dat)))
+    names(dat) <- dat_names
+
+  }
 
   x$acceptance_to_schedule <- tibble(threshold = NA
                                      , value = dat$avg_days_to_agreed
@@ -43,23 +47,13 @@ get_ppm_metrics <- function(org_id) {
                                , sublabel = NA)
 
   x$attendance_per_scheduled_visit = tibble(threshold = NA
-                                            , value = paste0(dat$percent_provider_caused * 100, "%")
+                                            , value = ifelse(!is.na(dat$percent_provider_caused)
+                                                                    , paste0(dat$percent_provider_caused * 100, "%")
+                                                                    , NA)
                                             , label = "Rate of Provider Cancellations"
                                             , sublabel = "Among 24-Hour Cancellations")
 
-  }
+
   x
 
-  }
-
-
-
-
-
-
-
-
-
-
-
-
+}
