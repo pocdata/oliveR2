@@ -11,6 +11,8 @@ get_ppm_metrics <- function(org_id) {
 
   file_path <- paste0(system.file('extdata', package = 'oliveR2'),'/')
 
+  df_file <- "provider_performance_metrics.rds"
+
   dat <- readr::read_rds(paste0(file_path, df_file))
 
   dat <- dat[dat$org_id == org_id,]
