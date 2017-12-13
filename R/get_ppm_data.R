@@ -22,12 +22,8 @@ get_ppm_data <- function(bld_sch_name = "independent"
 
   message("querying ppm data... ", appendLF = FALSE)
 
-  # ppm_data <-
-  #   tbl(con, "provider_performance_metrics") %>%
-  #   rename(id_provider_dim_pcv = org_id)
-
   ppm_data <-
-    DBI::dbGetQuery(con, "SELECT * FROM provider_performance_metrics")
+    DBI::dbGetQuery(con, paste("SELECT * FROM", table_name))
 
   message("done")
 
