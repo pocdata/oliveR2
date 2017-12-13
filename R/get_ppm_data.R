@@ -10,14 +10,16 @@
 
 get_ppm_data <- function(bld_sch_name = "independent"
                          , establish_con = TRUE
-                         , table_name = "provider_performance_metrics"){
+                         , table_name = Sys.getenv("OLIVER_REPLICA_PPM_TABLE")){
 
-  if (establish_con) {
+  if (establish_con){
+
     message("establishing connection to database... ", appendLF = FALSE)
 
     suppressMessages(establish_con_olvr_rplc(bld_sch_name))
 
     message("done")
+
   }
 
   message("querying ppm data... ", appendLF = FALSE)

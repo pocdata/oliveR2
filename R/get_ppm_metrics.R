@@ -8,8 +8,7 @@
 #' @examples
 
 get_ppm_metrics <- function(org_id
-                            , table_name = "provider_performance_metrics"
-                            ) {
+                            , table_name = Sys.getenv("OLIVER_REPLICA_PPM_TABLE")){
 
   file_path <- paste0(system.file('extdata', package = 'oliveR2'),'/')
 
