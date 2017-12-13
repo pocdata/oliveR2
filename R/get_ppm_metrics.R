@@ -42,10 +42,12 @@ get_ppm_metrics <- function(org_id
                                                            , paste0(dat$percent_scheduled_in_7 * 100, "% Planned within 7 Days")
                                                            , NA))
 
-  x$child_count_value = tibble(threshold = NA
-                               , value = dat$avg_num_children
-                               , label = "Children per Referral"
-                               , sublabel = NA)
+  x$attendence_rate = tibble(threshold = NA
+                             , value = ifelse(!is.na(dat$percent_attended)
+                                              , paste0(dat$percent_attended * 100, "%")
+                                              , NA)
+                             , label = "Attendance Rate"
+                             , sublabel = "Among Scheduled Visits")
 
   x$attendance_per_scheduled_visit = tibble(threshold = NA
                                             , value = ifelse(!is.na(dat$percent_provider_caused)
